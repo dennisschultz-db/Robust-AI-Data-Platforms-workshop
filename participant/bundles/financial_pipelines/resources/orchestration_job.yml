@@ -1,0 +1,78 @@
+resources:
+  jobs:
+    financial_intelligence__job:
+      name: financial_intelligence_job
+      description: >
+        Orchestrates the full financial document intelligence pipeline.
+        Runs the Spark Declarative Pipeline, then validates output quality,
+        then sends a completion notification.
+        Triggered manually or on a schedule — not run continuously.
+
+      tags:
+        workshop: "true"
+        session:  "1"
+        track:    "robust-ai-data-platforms"
+
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: shared_schema
+          default: ${var.shared_schema}
+
+      tasks:
+        # Task 1: Run the Spark Declarative Pipeline (bronze → silver → gold)
+        - task_key: run_pipeline
+          description: Trigger the financial_intelligence_pipeline and wait for completion
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.financial_intelligence_pipeline.id}
+            full_refresh: false
+
+        # Task 2: Build the Vector Search source table (Session 2)
+        # Writes financial_docs_for_search as a managed Delta table with CDF enabled.
+        # A plain Delta table is required — Vector Search Delta Sync does not support
+        # Streaming Tables or Materialized Views as index sources.
+        - task_key: build_search_table
+          description: Write financial_docs_for_search as a CDF-enabled Delta table for VS indexing
+          depends_on:
+            - task_key: run_pipeline
+          notebook_task:
+            notebook_path: ../jobs/build_search_table.ipynb
+            base_parameters:
+              catalog:       "{{job.parameters.catalog}}"
+              shared_schema: "{{job.parameters.shared_schema}}"
+          environment_key: workshop_env
+
+        # Task 3: Validate output quality (runs after pipeline + search table build)
+        - task_key: validate_quality
+          description: Assert row counts and data quality on silver and gold tables
+          depends_on:
+            - task_key: build_search_table
+          notebook_task:
+            notebook_path: ../jobs/validate_quality.ipynb
+            base_parameters:
+              catalog:       "{{job.parameters.catalog}}"
+              shared_schema: "{{job.parameters.shared_schema}}"
+          environment_key: workshop_env
+
+        # Task 3: Notify completion
+        - task_key: notify_complete
+          description: Print row count summary and confirm pipeline success
+          depends_on:
+            - task_key: validate_quality
+          notebook_task:
+            notebook_path: ../jobs/notify_complete.ipynb
+            base_parameters:
+              catalog:       "{{job.parameters.catalog}}"
+              shared_schema: "{{job.parameters.shared_schema}}"
+          environment_key: workshop_env
+
+      environments:
+        - environment_key: workshop_env
+          spec:
+            client: "5"
+            dependencies:
+              - databricks-sdk>=0.20.0
+
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}

@@ -1,0 +1,71 @@
+bundle:
+  name: financial-pipelines
+
+# ─── Variables ────────────────────────────────────────────────────────────────
+# Override at deploy time with: databricks bundle deploy --var="schema=my_schema"
+
+variables:
+  catalog:
+    default: platform-workshop
+    description: Unity Catalog catalog name
+
+  shared_schema:
+    default: 00_shared
+    description: Schema containing instructor-staged shared data and pipeline outputs
+
+  schema:
+    default: ${workspace.current_user.userName}
+    description: >
+      Personal schema for this participant. The pipeline writes outputs to
+      shared_schema; this variable is used by the orchestration job to scope
+      per-participant resources (e.g. quality validation tables).
+
+  notification_email:
+    default: ${workspace.current_user.userName}
+    description: Email address for job failure notifications
+
+# ─── Resources ────────────────────────────────────────────────────────────────
+include:
+  - resources/*.yml
+
+# ─── Targets ──────────────────────────────────────────────────────────────────
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog:       dennis_schultz
+      shared_schema: 00_shared
+
+  fevm-aws:
+    mode: production
+    workspace:
+      root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog:       dennis_schultz
+      shared_schema: 00_shared
+
+  fevm-azure:
+    mode: production
+    workspace:
+      root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog:       dennis_schultz_azure_classic01
+      shared_schema: 00_shared
+
+  aws-sandbox:
+    mode: production
+    workspace:
+      root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog:       vector_sandbox_01
+      shared_schema: 00_shared
+
+  wokrshop:
+    mode: production
+    workspace:
+      root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+      host : https://adb-7405614567569519.19.azuredatabricks.net/
+    variables:
+      catalog:       vectorcatalog01
+      shared_schema: 00_shared

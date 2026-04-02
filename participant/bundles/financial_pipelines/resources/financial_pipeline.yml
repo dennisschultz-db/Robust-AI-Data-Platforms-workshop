@@ -1,0 +1,41 @@
+resources:
+  pipelines:
+    financial_intelligence_pipeline:
+      name: financial_intelligence_pipeline
+
+      # Write outputs to the shared schema so all participants can query them
+      catalog: ${var.catalog}
+      schema:  ${var.shared_schema}
+
+      # Triggered mode — run on demand or via the orchestration job
+      continuous: false
+
+      # PREVIEW channel required for ai_parse_document() and ai_extract() in pipelines
+      channel: PREVIEW
+
+      # Serverless compute
+      serverless: true
+
+      configuration:
+        # Pass catalog/schema into the pipeline notebooks via spark.conf
+        pipeline.catalog:       ${var.catalog}
+        pipeline.shared_schema: ${var.shared_schema}
+
+      libraries:
+        - file:
+            path: ../src/financial_intelligence_pipeline/transformations/bronze_ingest.py 
+        - file:
+            path: ../src/financial_intelligence_pipeline/transformations/silver_extract.py
+        - file:
+            path: ../src/financial_intelligence_pipeline/transformations/gold_classify.py
+
+      filters:
+        # Exclude tests and utility files from pipeline runs
+        exclude:
+          - "**/test_*.py"
+          - "**/utils/**"
+
+      tags:
+        workshop: "true"
+        session:  "1"
+        track:    "robust-ai-data-platforms"
