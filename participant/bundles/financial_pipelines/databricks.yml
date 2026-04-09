@@ -1,6 +1,12 @@
 bundle:
   name: financial-pipelines
 
+permissions:
+    - user_name: dennis.schultz@databricks.com
+      level: CAN_MANAGE
+    - group_name: users
+      level: CAN_VIEW
+
 # ─── Variables ────────────────────────────────────────────────────────────────
 # Override at deploy time with: databricks bundle deploy --var="schema=my_schema"
 
@@ -55,11 +61,15 @@ targets:
 
   aws-sandbox:
     mode: production
+    permissions:
+      - group_name: workspace_users
+        level: CAN_RUN
     workspace:
       root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog:       vector_sandbox_01
       shared_schema: 00_shared
+
 
   wokrshop:
     mode: production
