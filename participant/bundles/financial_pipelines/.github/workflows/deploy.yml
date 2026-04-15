@@ -1,0 +1,69 @@
+# ─── Deploy: financial_pipelines Bundle ────────────────────────────────────────
+# Manual workflow to deploy the financial_pipelines DAB to any configured target.
+#
+# Targets defined in databricks.yml:
+#   dev         – development workspace (default)
+#   fevm-aws    – FE Vending Machine (AWS)
+#   fevm-azure  – FE Vending Machine (Azure)
+#   aws-sandbox – AWS sandbox (production mode)
+#   workshop    – Workshop Azure workspace (production mode)
+#
+# Required secrets per target (Settings → Secrets → Actions).
+# Each target reads DATABRICKS_HOST and DATABRICKS_TOKEN from the environment.
+# Add target-specific secrets if workspaces differ:
+#
+#   DEV_DATABRICKS_HOST / DEV_DATABRICKS_TOKEN
+#   WORKSHOP_DATABRICKS_HOST / WORKSHOP_DATABRICKS_TOKEN
+#   ... etc.
+#
+# The workflow maps the selected target to its secrets automatically.
+# ───────────────────────────────────────────────────────────────────────────────
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_job:
+        description: "Run the orchestration job after deploy?"
+        required: false
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: participant/bundles/financial_pipelines
+
+jobs:
+  deploy:
+    name: Deploy → prod
+    runs-on: ubuntu-latest
+
+    environment: prod  # Maps to a GitHub Environment for secret scoping
+
+    # Each GitHub Environment should define its own DATABRICKS_HOST and
+    # DATABRICKS_TOKEN secrets. See:
+    # https://docs.github.com/en/actions/deployment/targeting-different-environments
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate bundle
+        run: databricks bundle validate -t prod
+
+      - name: Deploy bundle
+        run: databricks bundle deploy -t prod --auto-approve
+
+      - name: Run orchestration job
+        if: ${{ inputs.run_job == true }}
+        run: |
+          databricks bundle run financial_intelligence_job \
+            -t workshop \
+            --no-wait
+          echo "Job triggered. Monitor progress in the Databricks workspace."

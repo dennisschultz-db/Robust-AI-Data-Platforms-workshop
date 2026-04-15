@@ -1,0 +1,75 @@
+# ─── CI: Validate & Test ───────────────────────────────────────────────────────
+# Runs on every push and pull request targeting main.
+#
+# Steps:
+#   1. Validate the DAB configuration (bundle validate)
+#   2. Run Python unit tests against the pipeline source code
+#
+# Required secrets (Settings → Secrets → Actions):
+#   DATABRICKS_HOST   – workspace URL, e.g. https://adb-xxx.azuredatabricks.net
+#   DATABRICKS_TOKEN  – personal access token or service principal OAuth token
+#
+# The validate step uses the default target (dev). If your dev workspace
+# requires a different host, add DATABRICKS_HOST_DEV / DATABRICKS_TOKEN_DEV
+# secrets and reference them below.
+# ───────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "**"
+
+defaults:
+  run:
+    working-directory: participant/bundles/financial_pipelines
+
+jobs:
+  # ── 1. Bundle Validation ─────────────────────────────────────────────────────
+  validate:
+    name: Bundle Validate
+    runs-on: ubuntu-latest
+
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate bundle (dev target)
+        run: databricks bundle validate -t dev
+
+  # ── 2. Unit Tests ─────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java 11 (required by PySpark)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Install test dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Run pytest
+        run: pytest tests/ -v --tb=short
