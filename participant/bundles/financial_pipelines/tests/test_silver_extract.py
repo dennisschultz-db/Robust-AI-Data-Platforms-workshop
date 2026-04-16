@@ -10,8 +10,19 @@ Corresponds to:
 
 import pytest
 from pyspark.sql import Row
-from pyspark.sql.functions import coalesce, col, element_at, regexp_extract, split
+from pyspark.sql.functions import coalesce, col, element_at, expr, regexp_extract, split
 
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+# Must match the array passed to ai_classify() in silver_extract.py Step 3b.
+CANONICAL_COMPANIES = {
+    "Amazon.com, Inc.",
+    "Apple Inc.",
+    "Meta Platforms, Inc.",
+    "Microsoft Corporation",
+    "NVIDIA Corporation",
+}
 
 # ── Expected output schema ────────────────────────────────────────────────────
 
@@ -135,6 +146,73 @@ class TestCompanyFallback:
         )
         result = apply_company_fallback(df).collect()
         assert result[0]["company"] == "Amazon"
+
+
+# ── company normalization (ai_classify) ───────────────────────────────────────
+
+class TestCompanyNormalization:
+    """Tests for Step 3b — ai_classify() company normalization.
+
+    ai_classify() is a Databricks AI Function and is not available in local
+    PySpark.  The unit tests below validate the canonical list and expression
+    structure.  The integration test (marked ``databricks``) exercises the
+    actual function and requires a Databricks cluster with AI Functions enabled.
+    """
+
+    def test_canonical_list_covers_all_expected_companies(self):
+        """Guard against accidentally removing a company from the array."""
+        expected = {
+            "Amazon.com, Inc.",
+            "Apple Inc.",
+            "Meta Platforms, Inc.",
+            "Microsoft Corporation",
+            "NVIDIA Corporation",
+        }
+        assert CANONICAL_COMPANIES == expected
+
+    def test_canonical_list_has_no_duplicates(self):
+        """Duplicates would waste tokens and could confuse the classifier."""
+        canonical_list = sorted(CANONICAL_COMPANIES)
+        assert len(canonical_list) == len(set(canonical_list))
+
+    @pytest.mark.parametrize(
+        "raw_value, expected_canonical",
+        [
+            ("amazon",              "Amazon.com, Inc."),
+            ("Amazon",              "Amazon.com, Inc."),
+            ("Amazon.com",          "Amazon.com, Inc."),
+            ("AMZN",                "Amazon.com, Inc."),
+            ("Apple",               "Apple Inc."),
+            ("AAPL",                "Apple Inc."),
+            ("Meta",                "Meta Platforms, Inc."),
+            ("Facebook",            "Meta Platforms, Inc."),
+            ("Microsoft",           "Microsoft Corporation"),
+            ("MSFT",                "Microsoft Corporation"),
+            ("NVIDIA",              "NVIDIA Corporation"),
+            ("Nvidia",              "NVIDIA Corporation"),
+            ("Nvidia Corp",         "NVIDIA Corporation"),
+            ("NVDA",                "NVIDIA Corporation"),
+        ],
+        ids=lambda v: v,
+    )
+    @pytest.mark.databricks
+    def test_ai_classify_maps_variation_to_canonical(
+        self, spark, raw_value, expected_canonical,
+    ):
+        """Integration test — requires Databricks AI Functions.
+
+        Run with:  pytest -m databricks tests/
+        """
+        canonical_array = ", ".join(f"'{c}'" for c in sorted(CANONICAL_COMPANIES))
+        df = spark.createDataFrame(
+            [Row(company=raw_value)],
+            schema="company STRING",
+        )
+        result = df.withColumn(
+            "company",
+            expr(f"ai_classify(company, array({canonical_array}))"),
+        ).collect()
+        assert result[0]["company"] == expected_canonical
 
 
 # ── has_content expectation (expect_or_drop) ─────────────────────────────────
