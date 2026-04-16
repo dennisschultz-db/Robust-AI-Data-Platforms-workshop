@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+markers = [
+    "databricks: requires a Databricks cluster with AI Functions enabled",
+]
+# Treat unregistered marks as errors so typos are caught early
+addopts = "--strict-markers"

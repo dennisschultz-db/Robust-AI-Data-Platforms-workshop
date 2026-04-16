@@ -91,6 +91,23 @@ def financial_docs_silver():
         ),
     )
 
+    # Step 3b: Normalize company names to canonical forms.
+    # ai_extract() may return variations like "amazon", "Amazon.com",
+    # "NVIDIA", "Nvidia Corp", etc.  ai_classify() maps each value to the
+    # closest canonical name from the provided array.
+    df = df.withColumn(
+        "company",
+        expr(
+            "ai_classify(company, array("
+            "  'Amazon.com, Inc.',"
+            "  'Apple Inc.',"
+            "  'Meta Platforms, Inc.',"
+            "  'Microsoft Corporation',"
+            "  'NVIDIA Corporation'"
+            "))"
+        ),
+    )
+
     # Step 4: Select and rename the final columns.
     df = df.select(
         "source_path",
