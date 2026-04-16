@@ -46,7 +46,7 @@ resources:
         - task_key: validate_quality
           description: Assert row counts and data quality on silver and gold tables
           depends_on:
-            - task_key: build_search_table
+            - task_key: run_pipeline
           notebook_task:
             notebook_path: ../jobs/validate_quality.ipynb
             base_parameters:
@@ -54,7 +54,7 @@ resources:
               shared_schema: "{{job.parameters.shared_schema}}"
           environment_key: workshop_env
 
-        # Task 3: Notify completion
+        # Task 4: Notify completion
         - task_key: notify_complete
           description: Print row count summary and confirm pipeline success
           depends_on:
