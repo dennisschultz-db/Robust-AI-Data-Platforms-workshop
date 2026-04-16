@@ -49,7 +49,8 @@ def financial_docs_silver():
         expr("""
             concat_ws('\n\n',
                 transform(
-                    try_cast(ai_parse_document(content):document:elements AS ARRAY<VARIANT>),
+                    try_cast(
+                        ai_parse_document(content):document:elements AS ARRAY<VARIANT>),
                     el -> try_cast(el:content AS STRING)
                 )
             )
@@ -61,15 +62,18 @@ def financial_docs_silver():
     # field names match those labels exactly.
     df = df.withColumn(
         "extracted",
-        expr(
-            "ai_extract(plain_text, array("
-            "  'company',"
-            "  'fiscal_period',"
-            "  'document_type',"
-            "  'revenue',"
-            "  'net_income'"
-            "))"
-        ),
+        expr("""
+            ai_extract(
+                plain_text, 
+                array(
+                    'company',
+                    'fiscal_period',
+                    'document_type',
+                    'revenue',
+                    'net_income'
+                )
+            )
+        """),
     )
 
     # Step 3a: Fallback for nulls in document_type and company.
@@ -97,15 +101,18 @@ def financial_docs_silver():
     # closest canonical name from the provided array.
     df = df.withColumn(
         "company",
-        expr(
-            "ai_classify(company, array("
-            "  'Amazon.com, Inc.',"
-            "  'Apple Inc.',"
-            "  'Meta Platforms, Inc.',"
-            "  'Microsoft Corporation',"
-            "  'NVIDIA Corporation'"
-            "))"
-        ),
+        expr("""
+            ai_classify(
+                company, 
+                array(
+                    'Amazon.com, Inc.',
+                    'Apple Inc.',
+                    'Meta Platforms, Inc.',
+                    'Microsoft Corporation',
+                    'NVIDIA Corporation'
+                )
+            )
+        """),
     )
 
     # Step 4: Select and rename the final columns.
