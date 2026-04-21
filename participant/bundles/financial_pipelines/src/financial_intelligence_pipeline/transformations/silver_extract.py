@@ -1,13 +1,13 @@
 # Databricks Lakeflow Spark Declarative Pipeline — Silver Layer
 #
-# Parses PDF binary content into plain text using ai_parse_document(), then uses
-# ai_extract() to pull structured fields (company, period, document type,
-# revenue, net income) from the plain text.
+# Parses PDF binary content using ai_parse_document(), then uses ai_extract()
+# to pull structured fields (company, period, document type, revenue, net income)
+# from the plain text.
 #
-# ai_parse_document() returns a VARIANT.  We extract plain text directly from
-# the VARIANT using :document:elements path syntax — no to_json() round-trip
-# needed.  Plain text is cleaner input for ai_extract(), ai_classify(), and
-# the Vector Search embedding model than a JSON-wrapped string.
+# ai_parse_document() returns a VARIANT.  We persist the full VARIANT as
+# `parsed_document` so that downstream jobs can call ai_prep_search() for
+# semantic chunking.  Plain text is derived from the VARIANT for ai_extract()
+# and ai_classify().
 #
 # Data quality expectations:
 #   - DROP rows where plain text is null or suspiciously short (< 200 chars)
@@ -20,8 +20,9 @@ from pyspark.sql.functions import col, coalesce, element_at, expr, regexp_extrac
 @dp.table(
     name="financial_docs_silver",
     comment=(
-        "Plain text and AI-extracted structured fields from financial PDFs. "
-        "Produced by ai_parse_document() and ai_extract()."
+        "Parsed documents and AI-extracted structured fields from financial PDFs. "
+        "Produced by ai_parse_document() and ai_extract(). The parsed_document "
+        "VARIANT is preserved for downstream ai_prep_search() chunking."
     ),
     table_properties={
         "quality":                          "silver",
@@ -39,18 +40,25 @@ def financial_docs_silver():
     # Step 1: Read the bronze streaming table.
     df = spark.readStream.table("financial_docs_bronze")
 
-    # Step 2: Parse the raw PDF bytes into plain text.
-    # ai_parse_document() returns a VARIANT with a document:elements array.
-    # We concatenate the content field of each element with double newlines to
-    # produce clean prose — better for ai_extract(), ai_classify(), and embeddings
-    # than a JSON-serialised string.
+    # Step 2: Parse the raw PDF bytes.
+    # ai_parse_document() returns a VARIANT.  We persist the full VARIANT as
+    # `parsed_document` so that the build_search_table job can call
+    # ai_prep_search() for semantic chunking without re-parsing.
+    df = df.withColumn(
+        "parsed_document",
+        expr("ai_parse_document(content)"),
+    )
+
+    # Derive plain_text from the VARIANT — still needed for ai_extract() below.
+    # Concatenate the content field of each element with double newlines to
+    # produce clean prose for downstream AI functions.
     df = df.withColumn(
         "plain_text",
         expr("""
             concat_ws('\n\n',
                 transform(
                     try_cast(
-                        ai_parse_document(content):document:elements AS ARRAY<VARIANT>),
+                        parsed_document:document:elements AS ARRAY<VARIANT>),
                     el -> try_cast(el:content AS STRING)
                 )
             )
@@ -120,6 +128,7 @@ def financial_docs_silver():
         "source_path",
         "file_size_bytes",
         "ingested_at",
+        "parsed_document",
         "plain_text",
         "company",
         col("extracted.fiscal_period").alias("fiscal_period"),
