@@ -59,6 +59,7 @@ resources:
           description: Print row count summary and confirm pipeline success
           depends_on:
             - task_key: validate_quality
+            - task_key: build_search_table
           notebook_task:
             notebook_path: ../jobs/notify_complete.ipynb
             base_parameters:
