@@ -40,36 +40,8 @@ targets:
     mode: development
     default: true
     variables:
-      catalog:       dennis_schultz
+      catalog:       dev_catalog
       shared_schema: 00_shared
-
-  fevm-aws:
-    mode: production
-    workspace:
-      root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
-    variables:
-      catalog:       dennis_schultz
-      shared_schema: 00_shared
-
-  fevm-azure:
-    mode: production
-    workspace:
-      root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
-    variables:
-      catalog:       dennis_schultz_azure_classic01
-      shared_schema: 00_shared
-
-  aws-sandbox:
-    mode: production
-    permissions:
-      - group_name: workspace_users
-        level: CAN_MANAGE
-    workspace:
-      root_path : /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
-    variables:
-      catalog:       vector_sandbox_01
-      shared_schema: 00_shared
-
 
   workshop:
     mode: production
